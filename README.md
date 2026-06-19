@@ -16,12 +16,12 @@ Doorn N, van Putten MJAM, Frega M. Automated inference of disease mechanisms in 
 - the model simulates the dynamics of excitatory and/or inhibitory neurons
 - the neurons can be connected randomly or in a small-world setting, with or without distance-dependent connectivity probabilities/weights
 - neurons can be positioned on a grid, or randomly over the virtual MEA electrodes
-
+  <br>
 - each neuron always has a leak current, potassium current and sodium current. Paramter values of these can differ for E and I neurons.
 - the difference in excitability across neurons, firing threshold, and temporal noise fluctuation can be altered for E and/or I neurons separately
 - ampa, gaba and nmda receptors can be added seperately to E and/or I neurons
 - after-hyperpolarizing currents (AHP) can also be in-/excluded
-
+  <br>
 - short-term synaptic depression (STD) can be in-/excluded (pre-synaptically) for either E and/or I neurons
 - if STD is included, one can optionally also include short-term facilitation (STF) for E and/or I neurons
 - if STD is included, one can optionally also include asynchronous release (presynaptically) from E and/or I neurons
