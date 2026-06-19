@@ -17,9 +17,9 @@ Doorn N, van Putten MJAM, Frega M. Automated inference of disease mechanisms in 
 - the neurons can be connected randomly or in a small-world setting, with or without distance-dependent connectivity probabilities/weights
 - neurons can be positioned on a grid, or randomly over the virtual MEA electrodes
 
-- each neuron always has a leak current, potassium current and sodium current
-- the difference in excitability across neurons, firing threshold, and temporal noise fluctuation can be altered
-- ampa, gaba and nmda receptors can be added seperately to E/I neurons
+- each neuron always has a leak current, potassium current and sodium current. Paramter values of these can differ for E and I neurons.
+- the difference in excitability across neurons, firing threshold, and temporal noise fluctuation can be altered for E and/or I neurons separately
+- ampa, gaba and nmda receptors can be added seperately to E and/or I neurons
 - after-hyperpolarizing currents (AHP) can also be in-/excluded
 
 - short-term synaptic depression (STD) can be in-/excluded (pre-synaptically) for either E and/or I neurons
@@ -29,7 +29,7 @@ Doorn N, van Putten MJAM, Frega M. Automated inference of disease mechanisms in 
 **Measuring and Plotting:**
 - in the main .py file, one can set what neuronal mechanisms to record (e.g. spikes, membrane voltages, synaptic currents, etc.)
 - also, various spike- and/or burst-features can be calculated and returned as output
-- finally, one can control what plots to generate (e.g. the rasterplot with spike types, topologyplot of the distribution of neurons, and much more)
+- finally, one can control what plots to generate (e.g. the rasterplot, topologyplot of the distribution of neurons, plots of the synaptic currents, and much more)
 
 ## Installation:
 (to be added)
