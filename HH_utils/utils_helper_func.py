@@ -62,15 +62,16 @@ def build_population(
     std_I      = neuron_dict.get("I_sigma", 0 * pA)
     
     if "AHP" in model_mechanisms: 
-        alpha_Ca = neuron_dict["alpha_Ca"]        
+        alpha_Ca = neuron_dict["alpha_Ca"]                
         P = NeuronGroup(
             n_neurons,
             model=neuron_eq,
             threshold='V>0*mV',
-            reset='Ca += alpha_Ca',
+            reset=f'Ca += alpha_Ca',
             refractory=refractory,
             method='exponential_euler'
         )
+       
     else:
         P = NeuronGroup(
             n_neurons,
@@ -104,6 +105,8 @@ def build_population(
     if "AHP" in model_mechanisms: 
         P.tau_Ca = neuron_dict["tau_Ca"]
         P.g_AHP = neuron_dict["g_AHP"]
+        P.Ca = 0
+        P.alpha_Ca = alpha_Ca
        
     if "neuronal_noise" in model_mechanisms: 
         P.noise_sigma = neuron_dict["noise_sigma"]
@@ -163,11 +166,7 @@ def build_connection(
         Conn : Synapses
             Constructed and configured Synapses object.
     """
-    connect_type = network_dict["connect_type"] # or clustered, or small world, or hub-based, diectional, 
-    connect_args = network_dict.get("connect_type_args", False)
 
-    S_value= network_dict.get(f"S_connect_{conn_key}", False)   
-    
     Conn = Synapses(
         pre_group,
         post_group,
@@ -175,23 +174,58 @@ def build_connection(
         on_pre=onpre_equation,
         method="euler"
     )
-
-    # Connectivity pattern
-    if connect_type == "random":
-        Conn.connect(p=network_dict[f"p_connect_{conn_key}"]   )
+    
+    p_connect_type = network_dict["p_connect_type"] # or clustered, or small world, or hub-based, diectional, 
+    p_connect_args = network_dict.get("p_connect_type_args", False)
+    
+    w_connect_type = network_dict["w_connect_type"] # or clustered, or small world, or hub-based, diectional, 
+    w_connect_args = network_dict.get("w_connect_type_args", False)
+    
         
-        if S_value is not None:
-            Conn.S = S_value
-
+    # Connectivity pattern
+    if p_connect_type == "random":
+        Conn.connect(p=network_dict[f"p_connect_{conn_key}"])        
+    elif p_connect_type == "small_world": 
+        p_conn = network_dict[f"p_connect_{conn_key}"]
+        decay_p_conn = p_connect_args["decay_constant"]
+        Conn.connect(condition='i != j',
+          p=f'{p_conn}*exp( -((x_pre-x_post)**2 + (y_pre-y_post)**2) / ((decay_p_conn)**2) )')
+    else:
+        print("\n\n Cave: no connections formed!")
+        
+        
+        
+    if w_connect_type == "distributed":
+        w_sigma = w_connect_args["sigma"]
+        lower_bound = w_connect_args["lower_boundary"]
+        upper_bound = w_connect_args["upper_boundary"]
+        Conn.w[:] = f'clip(1.+{w_sigma}*randn(), {lower_bound}, {upper_bound})'
+    elif w_connect_type == "small_world":
+        decay_w_conn = w_connect_args["decay_constant"]
+        w_sigma = w_connect_args["sigma"]
+        lower_bound = w_connect_args["lower_boundary"]
+        upper_bound = w_connect_args["upper_boundary"]
+        Conn.w[:] = f'''clip(
+            exp( -((x_pre-x_post)**2 + (y_pre-y_post)**2)/({decay_w_conn}**2))
+            * (1 + {w_sigma}*randn()),
+            {lower_bound}, {upper_bound} )
+        '''
+    else:
+        print("\nAll synaptic weights set to one.")
+        Conn.w[:] = 1
+        
+        
+    Conn.S =  network_dict.get(f"S_connect_{conn_key}", 1)   
+            
     # Short-term depression
     if "std" in pre_model_mechanisms:
         Conn.tau_d = synapse_dict[f"tau_depression_{conn_key}"]
         Conn.U     = synapse_dict[f"strength_depression_{conn_key}"]
-
+        Conn.x_d = 1
         # Short-term facilitation (requires std in your logic)
         if "stf" in pre_model_mechanisms:
             Conn.tau_f = synapse_dict[f"tau_facilitation_{conn_key}"]
-
+            
     # NMDA
     if "nmda" in post_model_mechanisms and conn_key in ['e2e', 'e2i']:
         Conn.taus_nmda  = post_neuron_dict["taus_nmda"]
@@ -209,5 +243,5 @@ def build_connection(
     if network_dict.get("distance_delays", False):
         Vmax = network_dict["distance_delays_args"]["V_max"]
         Conn.delay = '(sqrt((x_pre - x_post)**2 + (y_pre - y_post)**2))/Vmax'
-    print("add w_distribution ")
+
     return Conn

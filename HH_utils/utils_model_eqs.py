@@ -9,10 +9,6 @@ MEADataAnalysis.py file.
 @author: Guido
 """
 
-import sys
-sys.path.append("/home/Guido/UT_VU/py_code/HH_model/HH_utils")
-
-
 
 #%% Single Neuron Equations: 
 
@@ -76,7 +72,7 @@ noise : volt/second
 
 ###############################################################################
 
-### I_syn = ... equations ###
+### I_syn = ... equations (note: I denotes current here, not Inhibitory) ###
 eqs_I_syn_ampa_tot = '''
 I_syn = I_ampa : amp
 '''
@@ -310,7 +306,7 @@ U_ar : 1
 
 #%% ### OnPre Equations: ###
 
-### Basic Equations: ###
+### Equations Pre-Synaptic: ###
 
 eqs_onpre_std = '''
 x_d *= (1-U)
@@ -326,6 +322,9 @@ uar += U_ar*(U_max-uar)
 eqs_onpre_nmda = '''
 x_nmda += 1
 '''
+
+### Equations Post-Synaptic: ###
+
 
 ### AMPA mechanism-dependent equations: ###
 
@@ -487,8 +486,7 @@ def get_equations_HH(dict_model_config):
         elif ({"ampa", "nmda", "gaba"} <= I_mechanisms):            
             eqs_neuron_I += eqs_I_syn_ampa_nmda_gaba_tot
         
-        else:
-            raise ValueError("\nNo valid synaptic mechanisms/neurotransmitters selected as input!")
+
         
         
         ### Add ODEs for the synapses ###
@@ -519,46 +517,39 @@ def get_equations_HH(dict_model_config):
         return eqs_neuron_E, eqs_neuron_I
         
     
-    def get_synapse_eq(E_mechanisms, I_mechanisms):      
+    def get_synapse_eq(pre_mechanisms, post_receptors):      
         """
         Construct brian2 synapse model equations for excitatory (E) and inhibitory (I)
         populations based on selected mechanisms.
 
         Input: 
-            E_mechanisms : set of strings
-                Set of enabled mechanisms for excitatory neurons.
+            pre_mechanisms : set of strings
+                Set of enabled pre-synaptic mechanisms.
                 Possible entries include:
                     "std"       : short term depression component
-                    "nmda"      : NMDA synaptic current
+                    "stf"       : short term facilitation
                     "asynchr"   : asynchronous release component
 
-            I_mechanisms : set of strings
-                Set of enabled mechanisms for inhibitory neurons.
+            post_receptors : set of strings
+                Set of post-synaptic receptors. this determines the synapse kind.
                 Possible entries include:
-                    "std"       : short term depression component
-                    "stf"       : short term facilitation component
-                    "asynchr"   : asynchronous release component
+                    "ampa", "gaba", "nmda"
 
         Output:
-            eqs_synapse_E : str
-                Complete equation string for excitatory synapses, assembled
+            eqs_synapse : str
+                Complete equation string for synapses, assembled
                 from selected mechanisms.
         
-            eqs_synapse_I : str
-                Complete equation string for inhibitory synapses, assembled
-                from selected mechanisms.
         """
 
-        eqs_synapse_E = eqs_synapse_basis
-        eqs_synapse_I = eqs_synapse_basis
+        eqs_synapse = eqs_synapse_basis
         
         ###########################################################################
         
         ### Check compatibility: ###
         
-        if ( (E_mechanisms & {"stf", "asynchr"} and "std" not in E_mechanisms)
-            or ("nmda" in E_mechanisms and "ampa" not in E_mechanisms)
-            or (I_mechanisms & {"stf", "asynchr", "asynchr"} and "gaba" not in I_mechanisms) ):      
+        if ( (pre_mechanisms & {"stf", "asynchr"} and "std" not in pre_mechanisms)
+            or ("nmda" in post_receptors and "ampa" not in post_receptors) ):      
             raise ValueError(
                 "\nNo valid/implemented synaptic mechanisms/neurotransmitters selected as input!"
             )
@@ -566,147 +557,146 @@ def get_equations_HH(dict_model_config):
         
         ### Excitatory Synapse: ###
         
-        # No NMDA/Asynchr. release
-        if ( ({"std"} <= E_mechanisms)
-            and not ({"nmda"} & E_mechanisms)
-            and not ({"asynchr"} & E_mechanisms) ):
-            eqs_synapse_E += eqs_synapse_std
+        if post_receptors & {"ampa", "nmda"}:
+            # No NMDA/Asynchr. release
+            if ( ({"std"} <= pre_mechanisms)
+                and not ({"nmda"} & post_receptors)
+                and not ({"asynchr"} & pre_mechanisms) ):
+                eqs_synapse += eqs_synapse_std
+                
+                if {"stf"} <= pre_mechanisms: 
+                    eqs_synapse += eqs_synapse_stf
             
-            if {"stf"} <= E_mechanisms: 
-                eqs_synapse_E += eqs_synapse_stf
-        
-        # No NMDA, incl. asynchr. release
-        if ( ({"asynchr", "std"} <= E_mechanisms)
-            and not ({"nmda"} & E_mechanisms)
-            and not ({"stf"} & E_mechanisms) ):
-            eqs_synapse_E += eqs_synapse_std_asynchr_E 
-        
-        if ( ({"asynchr", "std", "stf"} <= E_mechanisms)
-            and not ({"nmda"} & E_mechanisms) ):
-            eqs_synapse_E += eqs_synapse_std_stf_asynchr_E 
-        
-        # Incl. NMDA
-        if ( ({"nmda"} <= E_mechanisms)
-            and not ({"std"} & E_mechanisms)
-            and not ({"asynchr"} & E_mechanisms) 
-            and not ({"stf"} & E_mechanisms) ):
-            eqs_synapse_E += eqs_synapse_nmda
+            # No NMDA, incl. asynchr. release
+            if ( ({"asynchr", "std"} <= pre_mechanisms)
+                and not ({"nmda"} & post_receptors)
+                and not ({"stf"} & pre_mechanisms) ):
+                eqs_synapse += eqs_synapse_std_asynchr_E 
             
-        if ( ({"nmda", "std"} <= E_mechanisms)
-            and not ({"asynchr"} & E_mechanisms) 
-            and not ({"stf"} & E_mechanisms) ):
-            eqs_synapse_E += eqs_synapse_nmda_std
-        
-        if ( ({"nmda", "std", "stf"} <= E_mechanisms)
-            and not ({"asynchr"} & E_mechanisms) ):
-            eqs_synapse_E += eqs_synapse_nmda_std_stf
-        
-        if ( ({"nmda", "std", "asynchr"} <= E_mechanisms)
-            and not ({"stf"} & E_mechanisms) ):
-            eqs_synapse_E += eqs_synapse_nmda_std_asynchr
-        
-        if ( {"nmda", "std", "stf", "asynchr"} <= E_mechanisms):
-            eqs_synapse_E += eqs_synapse_nmda_std_stf_asynchr
+            if ( ({"asynchr", "std", "stf"} <= pre_mechanisms)
+                and not ({"nmda"} & post_receptors) ):
+                eqs_synapse += eqs_synapse_std_stf_asynchr_E 
+            
+            # Incl. NMDA
+            if ( ({"nmda"} <= post_receptors)
+                and not ({"std"} & pre_mechanisms)
+                and not ({"asynchr"} & pre_mechanisms) 
+                and not ({"stf"} & pre_mechanisms) ):
+                eqs_synapse += eqs_synapse_nmda
+                
+            if ( ("nmda" in post_receptors and "std" in pre_mechanisms)
+                and not ({"asynchr"} & pre_mechanisms) 
+                and not ({"stf"} & pre_mechanisms) ):
+                eqs_synapse += eqs_synapse_nmda_std
+            
+            if ( ("nmda" in post_receptors and {"std", "stf"} <= pre_mechanisms)
+                and not ({"asynchr"} & pre_mechanisms) ):
+                eqs_synapse += eqs_synapse_nmda_std_stf
+            
+            if ( ("nmda" in post_receptors and {"std", "asynchr"} <= pre_mechanisms)
+                and not ({"stf"} & pre_mechanisms) ):
+                eqs_synapse += eqs_synapse_nmda_std_asynchr
+            
+            if ("nmda" in post_receptors and {"std", "stf", "asynchr"} <= pre_mechanisms):
+                eqs_synapse += eqs_synapse_nmda_std_stf_asynchr
         
        
         
         ###########################################################################
         
         ### Inhibitory Synapse: ###
-        
-        # No Asynchr. release
-        if ( ({"std"} <= I_mechanisms)
-            and not ({"asynchr"} & E_mechanisms) ):
-            eqs_synapse_I += eqs_synapse_std
+        if "gaba" in post_receptors: 
+            # No Asynchr. release
+            if ( ({"std"} <= pre_mechanisms)
+                and not ({"asynchr"} & pre_mechanisms) ):
+                eqs_synapse += eqs_synapse_std
+                
+                if {"stf"} <= pre_mechanisms: 
+                    eqs_synapse += eqs_synapse_stf
             
-            if {"stf"} <= I_mechanisms: 
-                eqs_synapse_I += eqs_synapse_stf
-        
-        if ( ({"std", "asynchr"} <= I_mechanisms)
-            and not ({"stf"} & E_mechanisms) ):
-            eqs_synapse_I += eqs_synapse_std_asynchr_I
-        
-        if ({"std", "asynchr", "stf"} <= I_mechanisms): 
-            eqs_synapse_I += eqs_synapse_std_stf_asynchr_I
+            if ( ({"std", "asynchr"} <= pre_mechanisms)
+                and not ({"stf"} & pre_mechanisms) ):
+                eqs_synapse += eqs_synapse_std_asynchr_I
+            
+            if ({"std", "asynchr", "stf"} <= pre_mechanisms): 
+                eqs_synapse += eqs_synapse_std_stf_asynchr_I
             
             
-        return eqs_synapse_E, eqs_synapse_I
+        return eqs_synapse
     
 
-    def get_onpre_eq(E_mechanisms, I_mechanisms):      
+    
+    def get_onpre_eq(pre_mechanisms, post_receptors):      
         """
         Construct the stochastic brian2 pre-synaptic model equations for 
         excitatory (E) and inhibitory (I) populations based on selected mechanisms.
     
-        Input: 
-            E_mechanisms : set of strings
-                Set of enabled mechanisms for excitatory neurons.
-                Possible entries include:
-                    "std"       : short term depression component
-                    "nmda"      : NMDA synaptic current
-                    "asynchr"   : asynchronous release component
+         Input: 
+             pre_mechanisms : set of strings
+                 Set of enabled pre-synaptic mechanisms.
+                 Possible entries include:
+                     "std"       : short term depression component
+                     "stf"       : short term facilitation
+                     "asynchr"   : asynchronous release component
     
-            I_mechanisms : set of strings
-                Set of enabled mechanisms for inhibitory neurons.
-                Possible entries include:
-                    "std"       : short term depression component
-                    "stf"       : short term facilitation component
-                    "asynchr"   : asynchronous release component
+             post_receptors : set of strings
+                 Set of post-synaptic receptors. this determines the synapse kind.
+                 Possible entries include:
+                     "ampa", "gaba", "nmda"
+    
     
         Output:
-            eqs_onpre_E : str
-                Complete equation string for excitatory pre-synaptic equations,
+            eqs_onpre : str
+                Complete equation string for pre-synaptic equations,
                 assembled from selected mechanisms.
         
-            eqs_synapse_I : str
-                Complete equation string for inhibitory pre-synaptic equations,
-                assembled from selected mechanisms.
         """
     
-        eqs_onpre_E = ''''''
-        eqs_onpre_I = ''''''
+        eqs_onpre = '''
+        '''
         
         ###########################################################################
         
         ### Excitatory Onpre: ###
-        if "nmda" in E_mechanisms: 
-            eqs_onpre_E += eqs_onpre_nmda
- 
-        if "asynchr" in E_mechanisms:
-            eqs_onpre_E += eqs_onpre_asynchr
-        
-        if not (E_mechanisms & {"std", "stf"}):
-            eqs_onpre_E += eqs_onpre_ampa_basic
-        
-        if ( (E_mechanisms & {"std"})
-            and not (E_mechanisms & {"stf"}) ):
-            eqs_onpre_E += eqs_onpre_std
-            eqs_onpre_E += eqs_onpre_ampa_std            
+        if "ampa" in post_receptors: 
+            if "nmda" in post_receptors: 
+                eqs_onpre += eqs_onpre_nmda
+       
+            if "asynchr" in pre_mechanisms:
+                eqs_onpre += eqs_onpre_asynchr
             
-        if E_mechanisms <= {"std", "stf"}:
-            eqs_onpre_E += eqs_onpre_std_stf
-            eqs_onpre_E += eqs_onpre_ampa_std_stf
+            if not (pre_mechanisms & {"std", "stf"}):
+                eqs_onpre += eqs_onpre_ampa_basic
+            
+            if ( (pre_mechanisms & {"std"})
+                and not (pre_mechanisms & {"stf"}) ):
+                eqs_onpre += eqs_onpre_std
+                eqs_onpre += eqs_onpre_ampa_std            
+                
+            if pre_mechanisms <= {"std", "stf"}:
+                eqs_onpre += eqs_onpre_std_stf
+                eqs_onpre += eqs_onpre_ampa_std_stf
        
         
        ### Inhibitory Onpre: ###
-        
-        if "asynchr" in I_mechanisms:
-            eqs_onpre_I += eqs_onpre_asynchr
-            
-        if not (I_mechanisms & {"std", "stf"}):
-            eqs_onpre_I += eqs_onpre_gaba_basic
-       
-        if ( (I_mechanisms & {"std"})
-            and not (I_mechanisms & {"stf"}) ):
-            eqs_onpre_I += eqs_onpre_std
-            eqs_onpre_I += eqs_onpre_gaba_std
-      
-        if I_mechanisms <= {"std", "stf"}:
-            eqs_onpre_I += eqs_onpre_std_stf
-            eqs_onpre_I += eqs_onpre_gaba_std_stf
-
-
-        return eqs_onpre_E, eqs_onpre_I
+        if "gaba" in post_receptors:
+            if "asynchr" in pre_mechanisms:
+                eqs_onpre += eqs_onpre_asynchr
+                
+            if not (pre_mechanisms & {"std", "stf"}):
+                eqs_onpre += eqs_onpre_gaba_basic
+           
+            if ( (pre_mechanisms & {"std"})
+                and not (pre_mechanisms & {"stf"}) ):
+                eqs_onpre += eqs_onpre_std
+                eqs_onpre += eqs_onpre_gaba_std
+          
+            if pre_mechanisms <= {"std", "stf"}:
+                eqs_onpre += eqs_onpre_std_stf
+                eqs_onpre += eqs_onpre_gaba_std_stf
+    
+    
+        return eqs_onpre
 
 
     ###########################################################################
@@ -725,21 +715,39 @@ def get_equations_HH(dict_model_config):
     
     ### Construct equation-output-dict: ###
     mod_equations = {}
-
+    
     E_neuron, I_neuron = get_neuron_eq(E_mechanisms, I_mechanisms)
-    E_synapse, I_synapse = get_synapse_eq(E_mechanisms, I_mechanisms)
-    E_onpre, I_onpre = get_onpre_eq(E_mechanisms, I_mechanisms)
     
-    
-    if incl_E_neurons:         
-        mod_equations["E_neuron"] = E_neuron        
-        mod_equations["E_synapse"] = E_synapse
-        mod_equations["E_onpre"] = E_onpre
+    if incl_E_neurons:
         
-    if incl_I_neurons: 
+        EE_synapse = get_synapse_eq(E_mechanisms, E_mechanisms.difference({"gaba"}))
+        EE_onpre = get_onpre_eq(E_mechanisms, E_mechanisms.difference({"gaba"}))
+       
+        mod_equations["E_neuron"] = E_neuron
+        mod_equations["EE_synapse"] = EE_synapse
+        mod_equations["EE_onpre"] = EE_onpre
+        
+    if incl_I_neurons:    
+        
+        II_synapse = get_synapse_eq(I_mechanisms, I_mechanisms.difference({"ampa", "nmda"}))
+        II_onpre = get_onpre_eq(I_mechanisms, I_mechanisms.difference({"ampa", "nmda"}))
+        
         mod_equations["I_neuron"] = I_neuron
-        mod_equations["I_synapse"] = I_synapse
-        mod_equations["I_onpre"] = I_onpre
+        mod_equations["II_synapse"] = II_synapse
+        mod_equations["II_onpre"] = II_onpre
+        
+    if incl_E_neurons and incl_I_neurons:
+        
+        EI_synapse = get_synapse_eq(E_mechanisms, I_mechanisms.difference({"gaba"}))
+        EI_onpre = get_onpre_eq(E_mechanisms, I_mechanisms.difference({"gaba"}))
+        IE_synapse = get_synapse_eq(I_mechanisms, E_mechanisms.difference({"ampa", "nmda"}))
+        IE_onpre = get_onpre_eq(I_mechanisms, E_mechanisms.difference({"ampa", "nmda"}))
+        
+        mod_equations["EI_synapse"] = EI_synapse
+        mod_equations["EI_onpre"] = EI_onpre
+        mod_equations["IE_synapse"] = IE_synapse
+        mod_equations["IE_onpre"] = IE_onpre
+        
         
 
     return mod_equations
