@@ -7,9 +7,29 @@ The model is an extension (especially: added inhibition) of the model proposed b
 Doorn N, van Putten MJAM, Frega M. Automated inference of disease mechanisms in patient-hiPSC-derived neuronal networks. Commun Biol 2025;8:768. https://doi.org/10.1038/s42003-025-08209-2.
 
 ### Usage: ###
-The model components and parameter values can be controlled in the main .py file. This file calls the utils_simulator file, which collects the input settings, builds the neurons and connects them.
-This is all performed in Brian2 (Stimberg M, Brette R, Goodman DF. Brian 2, an intuitive and efficient neural simulator. Elife 2019;8. https://doi.org/10.7554/eLife.47314.)
-The utils simulator file calls several other files, among which the utils model eqs file, in which the ODEs and other equations are stored. 
+Summary: 
+- in the main .py file, one can control the model components and parameter values
+- the main .py file calles the utils_simulator file, which collects and processes the input from the main file, builds the neuronal modal and simulates it.
+- The model runs on Brian2 (Stimberg M, Brette R, Goodman DF. Brian 2, an intuitive and efficient neural simulator. Elife 2019;8. https://doi.org/10.7554/eLife.47314.)
+
+Parameters and Model Components: 
+- the model simulates the dynamics of excitatory and/or inhibitory neurons
+- the neurons can be connected randomly or in a small-world setting, with or without distance-dependent connectivity probabilities/weights
+- neurons can be positioned on a grid, or randomly over the virtual MEA electrodes
+
+- each neuron always has a leak current, potassium current and sodium current
+- the difference in excitability across neurons, firing threshold, and temporal noise fluctuation can be altered
+- ampa, gaba and nmda receptors can be added seperately to E/I neurons
+- after-hyperpolarizing currents (AHP) can also be in-/excluded
+
+- short-term synaptic depression (STD) can be in-/excluded (pre-synaptically) for either E and/or I neurons
+- if STD is included, one can optionally also include short-term facilitation (STF) for E and/or I neurons
+- if STD is included, one can optionally also include asynchronous release (presynaptically) from E and/or I neurons
+
+Measuring and Plotting:
+- in the main .py file, one can set what neuronal mechanisms to record (e.g. spikes, membrane voltages, synaptic currents, etc.)
+- also, various spike- and/or burst-features can be calculated and returned as output
+- finally, one can control what plots to generate (e.g. the rasterplot with spike types, topologyplot of the distribution of neurons, and much more)
 
 ### Installation: ###
 (to be added)

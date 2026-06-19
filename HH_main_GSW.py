@@ -4,6 +4,10 @@
 Created on Wed Feb 11 15:04:18 2026
 
 Main file to construct and simulate the HH model.
+Different dictionaries (organized python data structures) are created and
+combined to use as input for the simulator function. 
+This function returns an output dictionary and feature dataframe to use for
+further analyses.
 
 @author: Guido
 """
@@ -19,7 +23,7 @@ N_e = 80
 N_i = 20
 Maxdelay = 25 * ms
 neuron_grid_dist = 405/7 * umeter 
-Vmax = ((N_e+N_i + N_e+N_i) * neuron_grid_dist) / Maxdelay          # define in nicer way later; maximum velocity of propagation
+Vmax = ((N_e+N_i + N_e+N_i) * neuron_grid_dist) / Maxdelay          # maybe define in nicer way later; maximum velocity of propagation
 print("\nCheck if Vmax is correctly implemented!!!")
 area_E = 1000 * umeter ** 2                                         # area of a neuron
 area_I = 1000 * umeter ** 2
@@ -29,25 +33,25 @@ simulation_dict = dict()
 
 runsettings_dict = {
     "noise_seed": 111,
-    "output_dir": None,
+    "output_dir": None,                                             # to save/store results and/or figures
     "sim_name": "Test_config_x",
     "plot_figs": True,                                              # plots the output of variables in recording_dict
     "save_figs": False,
     "calculate_features": False,      
-    "save_features": False,                                         # do / do not calculate MEA features.
+    "save_features": False,                                         
     "save_simulated_data": False,
     "sim_time": 45 * second,
-    "sim_transient": 5 * second,
+    "sim_transient": 5 * second,                                    # first seconds to discard
     "time_step": defaultclock.dt,
     "electrode_grid_distance": 135 * umeter,
-    "radius_detect_neurons": 135/2 * umeter # the radius in which an electrode measures neurons
+    "radius_detect_neurons": 135/2 * umeter                         # the radius in which an electrode measures neurons
     }   
 
 network_dict = {    
     "n_e_neurons": N_e,
     "n_i_neurons": N_i,
     
-    "p_connect_e2e": 0.3, #10/N_e,                                          # connection probability
+    "p_connect_e2e": 0.3, #10/N_e,                                  # connection probability
     "p_connect_e2i": 0.2, #20/N_i,
     "p_connect_i2e": 0.2, #30/N_i,
     "p_connect_i2i": 0.1, #10/N_i,
@@ -57,15 +61,15 @@ network_dict = {
     "S_connect_i2e": 0.2,
     "S_connect_i2i": 0.2,
     
-    "p_connect_type": "random",                                       # or random, small_world
+    "p_connect_type": "random",                                       # random or small_world
     "p_connect_type_args": {"decay_constant": 150*umeter},
-    "w_connect_type": "distributed",                                       # or small world
+    "w_connect_type": "distributed",                                       # distributed or small world
     "w_connect_type_args": {"sigma": 0.7, "lower_boundary": 0, "upper_boundary": 2}, 
     
     "distance_delays": True,
     "distance_delays_args": {"V_max": Vmax},
 
-    "neuron_position_type": "random",                                    # method to place the neurons: random, or grid
+    "neuron_position_type": "random",                                    # method to place the neurons over the electrodes: random, or grid
     "neuron_position_args": {"neuron_grid_dist": neuron_grid_dist},         # average distance between E neurons (placed on a grid)
 }
 
@@ -264,7 +268,7 @@ analysis_dict = {
 }
 
 
-
+# Collect all input settings into one dictionary:
 simulation_dict = {
     "runsettings_dict": runsettings_dict,
     "network_dict": network_dict,
@@ -282,9 +286,6 @@ simulation_dict = {
     
 output_dict, feature_df = simulate_HH_net(simulation_dict)
 
-# print("\nFeatures: \n")
-# for col, val in feature_df.iloc[0].items():
-#     print(col, val)
 
 
 #%% Save simulation dict
@@ -317,26 +318,6 @@ with open(save_name, 'wb') as f:
 
 
 
-
-
-
-
-#%% plot mean membrane voltage of population
-
-plt.figure()
-trace_E = output_dict["trace_E"]
-plt.plot(trace_E.t, 1000*np.mean(trace_E.V, axis=0))
-plt.xlabel("t (s)")
-plt.ylabel("Mean membrane voltage E-neurons (mV)")
-plt.show()
-
-V_BP = bandpass_filter(1000*np.mean(trace_E.V, axis=0), 10000, lowcut=0.1, highcut=30, order=2)
-
-plt.figure()
-plt.plot(trace_E.t, V_BP)
-plt.xlabel("t (s)")
-plt.ylabel("Mean membrane voltage E-neurons BP (mV)")
-plt.show()
 
 
 

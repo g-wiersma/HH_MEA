@@ -165,7 +165,7 @@ def simulate_HH_net(simulation_dict):
             neuron_dict=inhibitory_dict,
             equations_dict=equations_dict,
             synapse_dict=synapse_dict,
-            model_mechanisms=I_mechanisms,   # or I_mechanisms if you separate them
+            model_mechanisms=I_mechanisms,   
             include_inhibition=True    # By definiton
         )
             
@@ -336,7 +336,7 @@ def simulate_HH_net(simulation_dict):
     # Synapse output_monitors: 
     if recording_dict.get("depression", False): 
         if include_E:
-            if len(Conn_EE) > 25:
+            if len(Conn_EE) > 25:       # select 25 random E-neurons to study.
                 recordlist_E = random.sample(range(1, len(Conn_EE) - 1), 25)            
             else:
                 recordlist_E = range(1, len(Conn_EE) - 1)
@@ -388,7 +388,7 @@ def simulate_HH_net(simulation_dict):
         network_to_run.add(monitor)
     
     time1 = timeit.default_timer()
-    print(f"\nNetwork constructed in {(time1-time0):.0f} s" )
+    print(f"\nNetwork constructed in {(time1-time0):.0f} s. \nInitializing simulation...\n" )
     network_to_run.run( runsettings_dict["sim_time"], report='text' )
     
                                
