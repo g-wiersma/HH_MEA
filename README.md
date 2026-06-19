@@ -12,7 +12,7 @@ Doorn N, van Putten MJAM, Frega M. Automated inference of disease mechanisms in 
 - the main .py file calles the utils_simulator file, which collects and processes the input from the main file, builds the neuronal modal and simulates it.
 - The model runs on Brian2 (Stimberg M, Brette R, Goodman DF. Brian 2, an intuitive and efficient neural simulator. Elife 2019;8. https://doi.org/10.7554/eLife.47314.)
 
-**Parameters and Model Components: **
+**Parameters and Model Components:**
 - the model simulates the dynamics of excitatory and/or inhibitory neurons
 - the neurons can be connected randomly or in a small-world setting, with or without distance-dependent connectivity probabilities/weights
 - neurons can be positioned on a grid, or randomly over the virtual MEA electrodes
