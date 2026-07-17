@@ -12,13 +12,13 @@ stored.
 """
 
 
-# IMPORT LIBRARIES
+### Import Libraries ###
 import numpy as np
 import timeit
 import pickle
 import random
 
-from brian2 import devices, BrianLogger
+from brian2 import devices, BrianLogger, start_scope, seed
 from brian2 import StateMonitor, SpikeMonitor, Network, collect
 from brian2 import second
 import brian2.codegen.cpp_prefs
@@ -63,7 +63,7 @@ def simulate_HH_net(simulation_dict):
         output_monitors : dict
             Dictionary mapping monitor names to Brian2 monitor objects.
     """
-    
+    start_scope()
     runsettings_dict = simulation_dict["runsettings_dict"]
     network_dict = simulation_dict["network_dict"]    
     if "excitatory_dict" in simulation_dict:
@@ -80,8 +80,11 @@ def simulate_HH_net(simulation_dict):
     #%% ### Set noise seed: ###
     
     noise_seed = runsettings_dict["noise_seed"]
+    seed(noise_seed)
     devices.device.seed(noise_seed)                           # set the seed for all the random number realisations        
-   
+    np.random.seed(noise_seed)
+    random.seed(noise_seed)
+    
     sim_name = runsettings_dict.get("sim_name", f"Simulation_{noise_seed}")
     print(f"\nConstructing Brian2 model for: {sim_name}")
     time0 = timeit.default_timer()
@@ -196,17 +199,19 @@ def simulate_HH_net(simulation_dict):
     if placement_type == "random": 
         # The idea is to create a cirle around the electrodes, and randomly place
         # the neurons in this circle.
-        np.random.seed(noise_seed)
+        
         
         electrode_dist = runsettings_dict["electrode_grid_distance"]
-        span_width_electrodes = 3 * electrode_dist
-        radius_cirle_around_elec = np.sqrt((0.5*span_width_electrodes)**2 + (0.5*span_width_electrodes)**2)
+        electrode_field_r = runsettings_dict["radius_detect_neurons"]
+        # span_width_electrodes = np.sqrt(electrode_field_r**2 + (3*electrode_field_r)**2) + electrode_field_r 
+        radius_cirle_around_elec =  runsettings_dict["radius_MEA_well"]
         N_E = network_dict.get("n_e_neurons", 0)
         N_I = network_dict.get("n_i_neurons", 0)
         N_tot = N_E + N_I
         
         theta = 2 * np.pi * np.random.rand(N_tot)
         rad = radius_cirle_around_elec * np.sqrt(np.random.rand(N_tot))  # radius *sqrt(randn) to prevent 'overpopulation' in center
+        
         theta_E = theta[0:N_E]
         theta_I = theta[N_E:]
         rad_E = rad[0:N_E]
@@ -240,6 +245,7 @@ def simulate_HH_net(simulation_dict):
             post_model_mechanisms = E_mechanisms,
             network_dict=network_dict
         )
+    
     
     if include_I: 
         II_synapse_equation = equations_dict["II_synapse"]
@@ -335,6 +341,7 @@ def simulate_HH_net(simulation_dict):
     
     # Synapse output_monitors: 
     if recording_dict.get("depression", False): 
+        
         if include_E:
             if len(Conn_EE) > 25:       # select 25 random E-neurons to study.
                 recordlist_E = random.sample(range(1, len(Conn_EE) - 1), 25)            
@@ -383,9 +390,19 @@ def simulate_HH_net(simulation_dict):
     
     #%% ### Simulate! ###
     
-    network_to_run = Network(collect())
-    for key, monitor in output_monitors.items(): 
-        network_to_run.add(monitor)
+    objects_to_run = []
+
+    for name in ["P_E", "P_I", "Conn_EE", "Conn_II", "Conn_EI", "Conn_IE"]:
+        if name in locals():
+            objects_to_run.append(locals()[name])
+    
+    objects_to_run += list(output_monitors.values())
+    
+    network_to_run = Network(*objects_to_run)
+        
+    # network_to_run = Network(collect())
+    # for key, monitor in output_monitors.items(): 
+    #     network_to_run.add(monitor)
     
     time1 = timeit.default_timer()
     print(f"\nNetwork constructed in {(time1-time0):.0f} s. \nInitializing simulation...\n" )
@@ -412,15 +429,17 @@ def simulate_HH_net(simulation_dict):
     else: 
         N_I = None
         P_I = None
-        
+    
+    do_calc_elec_info = recording_dict.get("electrode_info", False)
+         
     if plot_dict: 
-        electrodeplot= plot_dict.get("electrodeplot", False)
-        rasterlecplot = plot_dict.get("rasterlecplot", False)
+        electrodeplot= plot_dict.get("electrode_voltplot", False)
+        rasterlecplot = plot_dict.get("electrode_rasterplot", False)
         topologyplot = plot_dict.get("topologyplot", False)
-        onechannelplot = plot_dict.get("onechannelplot", False)
+        onechannelplot = plot_dict.get("one_electrode_voltplot", False)
    
     if (electrodeplot or rasterlecplot or topologyplot or onechannelplot) or (
-        analysis_dict is not False and runsettings_dict.get("calculate_features", True) ):
+        analysis_dict is not False and runsettings_dict.get("calculate_features", True) or do_calc_elec_info):
         
         electrode_info_dict = get_electrode_info(
                 runsettings_dict, output_monitors, excitatory_pop=P_E, 
@@ -434,7 +453,7 @@ def simulate_HH_net(simulation_dict):
             print("\nCalculating summary features...")
             APs = electrode_info_dict["APs"]
             rec_time = runsettings_dict["sim_time"] / second
-            transient = runsettings_dict.get("transient", 0 * second) / second
+            transient = runsettings_dict.get("sim_transient", 0 * second) / second
             dt2 = runsettings_dict["time_step"]                
             fs = 1 / (dt2 / second)
             
@@ -469,4 +488,4 @@ def simulate_HH_net(simulation_dict):
     time4= timeit.default_timer()
     print(f"\nTotal runtime: {(time4-time0):.0f} s" )    
     
-    return output_monitors, feature_df
+    return output_monitors, electrode_info_dict, feature_df

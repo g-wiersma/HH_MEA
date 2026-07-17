@@ -85,6 +85,8 @@ def build_population(
     P.V = neuron_dict["E_leak"]
     P.I = '(rand() - 0.5) * std_I'
     
+
+    
     # Membrane parameters
     P.Cm  = neuron_dict["Cm"]
     P.VT  = neuron_dict["V_threshold"]

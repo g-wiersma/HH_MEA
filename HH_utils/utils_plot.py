@@ -28,6 +28,10 @@ def volt_plot(runsettings_dict, output_monitors):
     plt.xlabel('time (s)')
     plt.ylabel('Membrane Potential of an individual neuron (mV)')
     
+    ax = plt.gca()
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    
     if trace_I is not None:
         plt.legend(['Excitatory', 'Inhibitory'])
     if runsettings_dict.get("save_figs", False):
@@ -48,10 +52,15 @@ def raster_plot(runsettings_dict, output_monitors, N_E=0):
         plt.plot(spikes_E.t / second, spikes_E.i, '.k', ms=0.7)
     if spikes_I is not None:
         plt.plot(spikes_I.t / second, spikes_I.i + N_E, '.r', ms = 0.7)
-    plt.title('Brain2 rasterplot with E-neurons in black and I-neurons in red')
+    plt.title('Rasterplot per neuron (E-neurons: black, I-neurons: red)')
     plt.xlabel('time (s)')
     plt.ylabel('neuron index')
     plt.xlim([transient/second, simtime/second])
+    
+    ax = plt.gca()
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    
     if runsettings_dict.get("save_figs", False):
         outputdir = runsettings_dict.get("output_dir", "/home/")
         noise_idx = runsettings_dict["noise_seed"]
@@ -63,15 +72,28 @@ def raster_plot(runsettings_dict, output_monitors, N_E=0):
 
 def electrode_plot(runsettings_dict, t, Voltagefilt):
 
-    # compute the signal every electrodes measures and filter it
-    plt.figure(figsize=(10, 6), dpi=300)
-    for k in np.arange(0, 12, 1):
-   
-        plt.plot(t, Voltagefilt[k,:] + k * 100, linewidth=0.75, color='black')
-        k += 1
+    fig, ax = plt.subplots(figsize=(8, 4), dpi=300)
     
-    plt.xlabel('time (s)', fontsize=15)
-    plt.tick_params(axis='y', which='both', left=False, right=False, labelleft=False)
+    offset = 100
+   
+    for k in range(12):
+        ax.plot(
+            t,
+            Voltagefilt[k, :] + k * offset,
+            linewidth=0.75,
+            color="black"
+        )
+   
+    
+    ax.set_xlabel("Time (s)", fontsize=12)
+    ax.set_ylabel("Electrode number", fontsize=12)
+    ax.set_yticks(np.arange(12) * offset)
+    ax.set_yticklabels(np.arange(12), fontsize=12)
+   
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+   
     plt.tight_layout()
     if runsettings_dict.get("save_figs", False):
         outputdir = runsettings_dict.get("output_dir", "/home/")
@@ -83,7 +105,7 @@ def electrode_plot(runsettings_dict, t, Voltagefilt):
 
 def rasterlec_plot(runsettings_dict, t, APs, NBs=None, time_bin=25 * ms):   
     simtime = runsettings_dict["sim_time"]
-    transient = runsettings_dict.get("transient", 0 * second)
+    transient = runsettings_dict.get("sim_transient", 0 * second)
     dt2 = runsettings_dict["time_step"]
     
     
@@ -94,13 +116,25 @@ def rasterlec_plot(runsettings_dict, t, APs, NBs=None, time_bin=25 * ms):
     
     if NBs is not None: 
         # Shade network bursts
-        for nb in NBs:
-            ax.axvspan(nb[0] * time_bin / second, nb[1] * time_bin / second, color='red', alpha=0.2,
-                       label="Network Burst" if 'NB' not in locals() else "")
-    ax.set_xlabel('Time (second)')
-    ax.set_ylabel('Spike times per electrode')
-    ax.set_xlim([transient/second - 1, simtime/second + 1])    
-    ax.axis("off")
+        for nb in NBs:           
+            start = transient/second + nb[0] * (time_bin/second)
+            end   = transient/second + nb[1] * (time_bin/second)
+            ax.axvspan(start, end, color='red', alpha=0.2)
+    # Labels
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Electrode")
+    
+    # Electrode ticks
+    ax.set_yticks(np.arange(12))
+    ax.set_yticklabels(np.arange(1, 13))   # or np.arange(12) if you prefer 0–11
+    
+    # Limits
+    ax.set_xlim([transient/second - 1, simtime/second + 1])
+    ax.set_ylim([-0.5, 11.5])
+    
+    # Despine
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
     fig.tight_layout()
     if runsettings_dict.get("save_figs", False):
         outputdir = runsettings_dict.get("output_dir", "/home/")
@@ -156,11 +190,11 @@ def topology_plot(runsettings_dict, network_dict, x_electrodes, y_electrodes, ex
     
 
     ax.set_aspect('equal')
-    ax.set_title('Placing of excitatory neurons (blue), inhibitory neurons (orange), \n and electrodes (black) with measurement range (grey)', fontsize=16)
+    ax.set_title('Placing of excitatory neurons (blue), inhibitory neurons (orange), \n and electrodes (black) with measurement range (grey)', fontsize=12)
     
     if network_dict["neuron_position_type"] == "random": 
-        span_width_elec = np.max(x_electrodes / umeter) - np.min(x_electrodes / umeter)
-        radius_neuron_placement = np.sqrt( (0.5*span_width_elec)**2 + (0.5*span_width_elec)**2 )
+        # span_width_elec = np.max(x_electrodes / umeter) - np.min(x_electrodes / umeter)
+        radius_neuron_placement =  runsettings_dict["radius_MEA_well"] / umeter 
         circ_placement = Circle((0, 0), radius_neuron_placement, fill=False, color='k', alpha=0.8, linewidth=2, linestyle='--')
         ax.add_patch(circ_placement)
         
@@ -184,6 +218,10 @@ def onechannel_plot(runsettings_dict, t, voltagetrace):
         plt.xlim([5, 10])
         plt.ylim([-15, 30])
         plt.title(f"Voltage measured by electrode {i+1}")
+        ax = plt.gca()
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        
         if runsettings_dict.get("save_figs", False):
             outputdir = runsettings_dict.get("output_dir", "/home/")
             noise_idx = runsettings_dict["noise_seed"]
@@ -224,6 +262,11 @@ def STD_plot(runsettings_dict, output_monitors, model_components_dict, synapse_d
     axs[3].set_ylabel('x*u')
     axs[3].set_xlabel('time (s)')
     axs[3].grid(visible=True, linestyle=':')
+        
+    for ax in axs:
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+    
     fig.tight_layout()
     # savefig(outputdir + simname + 'STDplotEE.png', dpi=300)
     plt.show()
@@ -369,6 +412,8 @@ def synapse_plot(runsettings_dict, output_monitors, model_components_dict):
     
     axs[-1].set_xlabel("time (s)")
     plt.title("Average Synaptic currents")
+    axs.spines["top"].set_visible(False)
+    axs.spines["right"].set_visible(False)
     fig.tight_layout()
     # savefig(outputdir + simname + 'SynapticCurrents.png', dpi=300)
     plt.show()
@@ -384,6 +429,9 @@ def adaptation_plot(runsettings_dict, output_monitors):
     plt.title('Average after-hyperpolarizing current')
     plt.xlabel('t (ms)')
     plt.ylabel('I_AHP (pA)')
+    ax = plt.gca()
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
     # savefig(outputdir + simname + 'Adaptation.png', dpi=300)
     plt.show()
 
@@ -396,7 +444,7 @@ def mechanism_plot(runsettings_dict, output_monitors, N_E=0, N_I=0):
     spikes_E = output_monitors.get("spikes_E", None)
     spikes_I = output_monitors.get("spikes_I", None)
     
-    transient = runsettings_dict.get("transient", 0 * second)
+    transient = runsettings_dict.get("sim_transient", 0 * second)
     dt2 = runsettings_dict["time_step"]    
     simtime = runsettings_dict["sim_time"]
     fs = 1 / (dt2 / second)
@@ -445,6 +493,7 @@ def mechanism_plot(runsettings_dict, output_monitors, N_E=0, N_I=0):
         axs[0].legend(['I', 'E'])
     fig.tight_layout()
     plt.xlim([transient / second, (simtime - transient) / second])
+    plt.title("Trans-membrane I, firing rate, STD, AHP Plot", fontsize=12)
     # savefig(outputdir + simname + 'mechplotzoom.png', dpi=300)
     plt.show()
     
@@ -457,7 +506,7 @@ def spikerate_plot(runsettings_dict, output_monitors):
     spikes_E = output_monitors.get("spikes_E", None)
     spikes_I = output_monitors.get("spikes_I", None)
     
-    transient = runsettings_dict.get("transient", 0 * second)
+    transient = runsettings_dict.get("sim_transient", 0 * second)
     dt2 = runsettings_dict["time_step"]    
     simtime = runsettings_dict["sim_time"]
     fs = 1 / (dt2 / second)
@@ -468,10 +517,14 @@ def spikerate_plot(runsettings_dict, output_monitors):
         APs = np.array(spikes_E.t)
     spikerate, _ = Calciumtrace(APs, simtime, transient, fs)
     
-    plt.figure(dpi=300)
+    plt.figure(dpi=300, figsize=(6, 3))
     plt.plot(np.arange(len(spikerate))*25*ms, spikerate, 'k')
-    plt.xlabel('time (s)')
-    plt.ylabel('Spikerate (spikes/second)')
+    plt.xlabel('time (s)', fontsize=12)
+    plt.ylabel('Spikerate (spikes/second)', fontsize=12)
+    
+    ax = plt.gca()
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
     #plt.xlim([11,20])
     # savefig(outputdir + simname + 'spikerate.png')
     plt.show()
@@ -481,7 +534,7 @@ def spikerate_plot(runsettings_dict, output_monitors):
 #     spikes_E = output_monitors.get("spikes_E", None)
 #     spikes_I = output_monitors.get("spikes_I", None)
     
-#     transient = runsettings_dict.get("transient", 0 * second)
+#     transient = runsettings_dict.get("sim_transient", 0 * second)
 #     dt2 = runsettings_dict["time_step"]    
 #     simtime = runsettings_dict["sim_time"]
 #     fs = 1 / (dt2 / second)
@@ -515,7 +568,7 @@ def calcium_plot(runsettings_dict, output_monitors, N_E=0, N_I=0):
     spikes_E = output_monitors.get("spikes_E", None)
     spikes_I = output_monitors.get("spikes_I", None)
     
-    transient = runsettings_dict.get("transient", 0 * second)
+    transient = runsettings_dict.get("sim_transient", 0 * second)
     dt2 = runsettings_dict["time_step"]    
     simtime = runsettings_dict["sim_time"]
     fs = 1 / (dt2 / second)
@@ -557,6 +610,10 @@ def patchplot(runsettings_dict, output_monitors, N_E=0, N_I=0):
     plt.xlabel('time (s)')
     plt.ylabel('Synaptic current')
     plt.xlim([10.5, 13])
+    ax = plt.gca()
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    
     plt.show()
 
 
@@ -578,9 +635,9 @@ def get_plots_HH(simulation_dict, output_monitors, model_components_dict,
     
     
     
-    if plot_dict.get("voltplot"): 
+    if plot_dict.get("neuron_voltplot"): 
         volt_plot(runsettings_dict, output_monitors)
-    if plot_dict.get("rasterplot"):
+    if plot_dict.get("neuron_rasterplot"):
         raster_plot(runsettings_dict, output_monitors, N_E=N_E)   
     if plot_dict.get("STDplot", None):
         STD_plot(runsettings_dict, output_monitors, model_components_dict, synapse_dict, N_E=0)        
@@ -589,10 +646,10 @@ def get_plots_HH(simulation_dict, output_monitors, model_components_dict,
     if plot_dict.get("adaptationplot", None):
         if "AHP" in model_components_dict["E_mechanisms"]:
             adaptation_plot(runsettings_dict, output_monitors)
-    if plot_dict.get("mechanismplot", None):
+    if plot_dict.get("summary_mechanismplot", None):
         if "AHP" in model_components_dict["E_mechanisms"]:
             mechanism_plot(runsettings_dict, output_monitors, N_E=N_E, N_I=N_I)
-    if plot_dict.get("spikerateplot", None):
+    if plot_dict.get("neuron_spikerateplot", None):
         spikerate_plot(runsettings_dict, output_monitors)
     if plot_dict.get("calciumplot", None):
         calcium_plot(runsettings_dict, output_monitors, N_E=N_E, N_I=N_I)
@@ -600,10 +657,10 @@ def get_plots_HH(simulation_dict, output_monitors, model_components_dict,
         patchplot(runsettings_dict, output_monitors, N_E=N_E, N_I=N_I)
         
          
-    electrodeplot= plot_dict.get("electrodeplot",False)
-    rasterlecplot = plot_dict.get("rasterlecplot", False)
+    electrodeplot= plot_dict.get("electrode_voltplot",False)
+    rasterlecplot = plot_dict.get("electrode_rasterplot", False)
     topologyplot = plot_dict.get("topologyplot", False)
-    onechannelplot = plot_dict.get("onechannelplot", False)
+    onechannelplot = plot_dict.get("one_electrode_voltplot", False)
      
     if electrodeplot or rasterlecplot or topologyplot or onechannelplot:
          

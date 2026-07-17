@@ -27,11 +27,14 @@ def get_electrode_info(runsettings_dict, output_monitors, excitatory_pop=None, i
     dt2 = runsettings_dict["time_step"]
     # set up a filter to filter the voltage signal
     fs = 1 / (dt2 / second)
-    fc = 100  # Cut-off frequency of the filter
+    fc = 300  # Cut-off frequency of the filter
     w = fc / (fs / 2)  # Normalize the frequency
     b, a = scipy.signal.butter(2, w, 'high')
-    voltagetraces = np.zeros((12, len(trace_E.t)))
-
+    if excitatory_pop is not None:
+        voltagetraces = np.zeros((12, len(trace_E.t)))
+    elif inhibitory_pop is not None: 
+        voltagetraces = np.zeros((12, len(trace_I.t)))
+        
     # determine from which neurons the electrodes measure a signal (faster than measuring everything)
     elec_grid_dist = runsettings_dict["electrode_grid_distance"]    # electrode grid size (there are 12 electrodes)
     elec_range = 3 * elec_grid_dist                                      # total width/heigth that the electrode grid spans
@@ -39,16 +42,18 @@ def get_electrode_info(runsettings_dict, output_monitors, excitatory_pop=None, i
    
 
     # Find the excitatory neurons that need to be measures by each electrode
-    elecrangesE = np.full((16, 40), np.nan)
-    elecrangesI = np.full((16, 40), np.nan)
+    max_N_neurons_measured = 50 # here, to prevent too complex computations, we state that a maximum of N neurons can be measured by a single electrode.
+    elecrangesE = np.full((16, max_N_neurons_measured), np.nan)
+    elecrangesI = np.full((16, max_N_neurons_measured), np.nan)
     
     r_detect_neuron = runsettings_dict["radius_detect_neurons"] # the radius in which an electrode measures neurons
     r2 = r_detect_neuron ** 2 
     
-    xE = excitatory_pop.x
-    yE = excitatory_pop.y
+    if excitatory_pop is not None:
+        xE = excitatory_pop.x
+        yE = excitatory_pop.y
     
-    if inhibitory_pop:
+    if inhibitory_pop is not None:
         xI = inhibitory_pop.x
         yI = inhibitory_pop.y
         
@@ -62,13 +67,14 @@ def get_electrode_info(runsettings_dict, output_monitors, excitatory_pop=None, i
         x_electrodes.append(x_electrode)
         y_electrodes.append(y_electrode)
         
-        dx = xE - x_electrode
-        dy = yE - y_electrode
-        mask = dx**2 + dy**2 < r2
-    
-        idx = np.where(mask)[0] # indeces of which neurons are measured by the electrode
-        n = min(len(idx), 40) # make sure these are not more than 40 
-        elecrangesE[i, :n] = idx[:n]
+        if excitatory_pop is not None:
+            dx = xE - x_electrode
+            dy = yE - y_electrode
+            mask = dx**2 + dy**2 < r2
+        
+            idx = np.where(mask)[0] # indeces of which neurons are measured by the electrode
+            n = min(len(idx), max_N_neurons_measured) # make sure these are not more than 40 
+            elecrangesE[i, :n] = idx[:n]
     
         if inhibitory_pop is not None:
             dx = xI - x_electrode
@@ -76,17 +82,17 @@ def get_electrode_info(runsettings_dict, output_monitors, excitatory_pop=None, i
             mask = dx**2 + dy**2 < r2
     
             idx = np.where(mask)[0]
-            n = min(len(idx), 40) # make sure these are not more than 40 
+            n = min(len(idx), max_N_neurons_measured) # make sure these are not more than 40 
             elecrangesI[i, :n] = idx[:n]
    
 
     # compute the signal every electrodes measures and filter it
     k = 0
     APs = []
-    
-    # convert neuron positions to NumPy arrays for efficiency
-    xE_positions = excitatory_pop.x[:]
-    yE_positions = excitatory_pop.y[:]
+    if excitatory_pop is not None:
+        # convert neuron positions to NumPy arrays for efficiency
+        xE_positions = excitatory_pop.x[:]
+        yE_positions = excitatory_pop.y[:]
     if inhibitory_pop is not None:
         xI_positions = inhibitory_pop.x[:]
         yI_positions = inhibitory_pop.y[:]
@@ -94,34 +100,39 @@ def get_electrode_info(runsettings_dict, output_monitors, excitatory_pop=None, i
     for k,i in enumerate([1,2,4,5,6,7,8,9,10,11,13,14]):  # skip corners
         x_electrode = x_electrodes[k]
         y_electrode = y_electrodes[k]
-    
-        # get valid neuron indices for this electrode
-        templist = elecrangesE[i, ~np.isnan(elecrangesE[i, :])].astype(int)
-        Voltage = np.zeros(len(trace_E.V[0]))
-                
-        # excitatory contribution
-        dx = xE_positions[templist] - x_electrode
-        dy = yE_positions[templist] - y_electrode
-        distances = np.sqrt(dx**2 + dy**2) / meter
-
         d_cutoff = np.min([r_detect_neuron * 0.2, 5* umeter])
-        scaling_weights = np.ones_like(distances)        
-        far_field_mask = distances > d_cutoff
-        scaling_weights[far_field_mask] = d_cutoff / distances[far_field_mask]
+                
+        alpha = np.log(1) / np.log(d_cutoff / (r_detect_neuron / meter) )
         
-        Voltage += np.sum((trace_E[templist].V / mV) * scaling_weights[:, np.newaxis],  axis=0)
+        if excitatory_pop is not None:
+            # get valid neuron indices for this electrode
+            templist = elecrangesE[i, ~np.isnan(elecrangesE[i, :])].astype(int)
+            Voltage = np.zeros(len(trace_E.V[0]))
+                    
+            # excitatory contribution
+            dx = xE_positions[templist] - x_electrode
+            dy = yE_positions[templist] - y_electrode
+            distances = np.sqrt(dx**2 + dy**2) / meter
+            scaling_weights = np.ones_like(distances)        
+            far_field_mask = distances > d_cutoff
+            scaling_weights[far_field_mask] = (d_cutoff / distances[far_field_mask])**alpha # this makes sure that the V of the farthest detectable neuron, is scaled with 0.7
+            
+            Voltage += np.sum((trace_E[templist].V / mV) * scaling_weights[:, np.newaxis],  axis=0)
         
         # inhibitory contribution
         if inhibitory_pop is not None:
+            if excitatory_pop is None:
+                Voltage = np.zeros(len(trace_I.V[0]))
+                
             templist2 = elecrangesI[i, ~np.isnan(elecrangesI[i, :])].astype(int)
             dx = xI_positions[templist2] - x_electrode
             dy = yI_positions[templist2] - y_electrode
             distances = np.sqrt(dx**2 + dy**2) / meter
             scaling_weights = np.ones_like(distances)        
             far_field_mask = distances > d_cutoff
-            scaling_weights[far_field_mask] = d_cutoff / distances[far_field_mask]
+            scaling_weights[far_field_mask] = (d_cutoff / distances[far_field_mask])**alpha
             
-            Voltage += np.sum((trace_E[templist2].V / mV) * scaling_weights[:, np.newaxis],  axis=0)
+            Voltage += np.sum((trace_I[templist2].V / mV) * scaling_weights[:, np.newaxis],  axis=0)
         
     
         # high-pass filter
@@ -131,7 +142,7 @@ def get_electrode_info(runsettings_dict, output_monitors, excitatory_pop=None, i
     
         # detect APs
         threshold = 4 * np.sqrt(np.mean(Voltagefilt**2))
-        APstemp, _ = find_peaks(np.abs(Voltagefilt), height=threshold)
+        APstemp, _ = find_peaks(np.abs(Voltagefilt), height=threshold, distance=int(0.5e-3 * fs))
         APs.extend([(k, t / second) for t in APstemp])
     
         k += 1
@@ -141,10 +152,11 @@ def get_electrode_info(runsettings_dict, output_monitors, excitatory_pop=None, i
         "x_electrodes": x_electrodes, 
         "y_electrodes": y_electrodes, 
         "voltagetraces": voltagetraces, 
-        "APs": APs, 
-        "elecrangesE": elecrangesE
-            }
+        "APs": APs,}
     
+    if excitatory_pop is not None:
+        electrode_info_dict["elecrangesE"] = elecrangesE 
+                
     if inhibitory_pop is not None:
         electrode_info_dict["elecrangesI"] = elecrangesI
        
@@ -341,8 +353,19 @@ def detect_megabursts(analysis_args, NBs, plot=False):
 
 def compute_MAC(spikeratesmooth):
     """Compute MAC as defined by Maheswaranathan."""
+    if np.all(spikeratesmooth == 0):
+        print("No spikes detected: MAC is undefined. Returning np.nan.")        
+        return np.nan
+    
     yf = fft(spikeratesmooth)
-    return max(abs(yf[1:])) / abs(yf[0])
+    
+    if np.abs(yf[0]) < 1e-9:
+        print("Too little spikes detected: MAC is undefined. Returning np.nan.")        
+        return np.nan
+    
+    else:
+        yf = fft(spikeratesmooth)
+        return max(abs(yf[1:])) / abs(yf[0])
 
 def rasterlecplot(analysis_args, APs, NBs, dt, plotstart, plotstop, color1, color2):
     """ Generate a raster plot with shaded regions indicating detected bursts """
@@ -380,10 +403,17 @@ def compute_ISI_measures(analysis_dict, APs_wot, fs, rec_time, transient):
     time_vector = np.arange(0, (rec_time - transient), 1/fs)
     isi_arrays = np.zeros((numelectrodes, len(time_vector)))
 
+    active_electrodes = []
     for electrode in range(numelectrodes):
         # Extract spike times for the current electrode
         electrode_spike_times = APs_wot[APs_wot[:, 0] == electrode, 1].astype(int)
-
+        
+        if len(electrode_spike_times) < 2:
+            print(f"Less than 2 spikes detected in electrode {electrode + 1} - electrode excluded from further analysis")
+            continue
+        
+        active_electrodes.append(electrode)
+        
         for i in range(len(electrode_spike_times) - 1):
             spike1 = electrode_spike_times[i]
             spike2 = electrode_spike_times[i + 1]
@@ -396,19 +426,31 @@ def compute_ISI_measures(analysis_dict, APs_wot, fs, rec_time, transient):
             isi_arrays[electrode, spike1:spike2] = tisi
             
             if (i + 1) == (len(electrode_spike_times) - 1):
-                isi_arrays[electrode, spike2:] = np.nan
+                isi_arrays[electrode, spike2:] = np.nan   
+    n_active_electrodes = len(active_electrodes)
 
+    if n_active_electrodes < 2:
+        print("Less than 2 electrodes active - spike features returned as nan.")
+        meanisicorr = sdisicorr = isi_distance = meanISI = sdmeanISI = sdtimeISI = np.nan            
+        return meanisicorr, sdisicorr, isi_distance, meanISI, sdmeanISI, sdtimeISI, active_electrodes
     # Compute ISI measures
-    meanisi_array = np.nanmean(isi_arrays, axis=0)
+    
+    active_isi_arrays = isi_arrays[active_electrodes, :]
+
+    valid_cols = ~np.all(np.isnan(active_isi_arrays), axis=0)
+    
+    meanisi_array = np.nanmean(active_isi_arrays[:, valid_cols], axis=0)
+
+
     meanISI = np.nanmean(meanisi_array)
     sdmeanISI = np.nanstd(meanisi_array)
-    sdtimeISI = np.nanmean(np.nanstd(isi_arrays, axis=0))
+    sdtimeISI =  np.nanmean( np.nanstd(active_isi_arrays[:, valid_cols], axis=0) )
 
     # Calculate the ISI-distance and ISI correlations
-    all_combinations = list(combinations(list(np.arange(numelectrodes)), 2))
+    all_combinations = list(combinations(active_electrodes, 2))
     isi_distances = np.zeros(len(all_combinations))
     isicoefficients = np.zeros(len(all_combinations))
-    N = len(isi_arrays[0, :])
+    N = len(active_isi_arrays[0, :])
     j = 0
     # iterate through the electrode combinations
     for electrode1_key, electrode2_key in all_combinations:
@@ -433,17 +475,15 @@ def compute_ISI_measures(analysis_dict, APs_wot, fs, rec_time, transient):
     meanisicorr = np.mean(isicoefficients)
     sdisicorr = np.std(isicoefficients)
     isi_distance = np.mean(isi_distances)
-    return meanisicorr, sdisicorr, isi_distance, meanISI, sdmeanISI, sdtimeISI
+    return meanisicorr, sdisicorr, isi_distance, meanISI, sdmeanISI, sdtimeISI, active_electrodes
 
 def compute_bursting_features(analysis_dict, NBs, numAPs, rec_time, transient):
-    time_bin = analysis_dict["analysis_args"]["time_bin"] / second
-    numelectrodes = analysis_dict.get("numelectrodes", 12)
+    time_bin = analysis_dict["analysis_args"]["time_bin"] / second   
     NBcount = len(NBs[:,0])
     MNBR = NBcount * 60 / (rec_time - transient)        # Mean Network Burst Rate
     NBdurations = (np.array(NBs[:, 1]) - np.array(NBs[:, 0])) * time_bin
     MNBD = np.mean(NBdurations)                            # Mean Network Burst Duration
-    PSIB = sum(NBs[:, 2] / numAPs) * 100                # Percentage of spike in Network Burst
-    MFR = numAPs / (rec_time - transient)  / numelectrodes
+    PSIB = np.nan if numAPs == 0 else np.sum(NBs[:, 2]) / numAPs * 100                # Percentage of spike in Network Burst    
     IBI = (np.array(NBs[1:, 0]) - np.array(NBs[0:-1, 1])) * time_bin
     CVIBI = np.std(IBI) / np.mean(IBI)                  # Coefficient of Variation of the inter-burst-intervals
     if NBcount == 0:
@@ -456,7 +496,7 @@ def compute_bursting_features(analysis_dict, NBs, numAPs, rec_time, transient):
     if NBcount < 2:
         CVIBI = 0.0
 
-    return MFR, MNBR, MNBD, PSIB, NFBs, CVIBI
+    return MNBR, MNBD, PSIB, NFBs, CVIBI
 
 
 #%% ### Collect features for HH simulator: ###
@@ -477,21 +517,18 @@ def get_features_HH(analysis_dict, APs, rec_time, transient, fs, return_NBs=Fals
     
     features = {}
     # Compute the network burst features based on either the detected bursts or detected megabursts (analysis_dict, NBs, numAPs, rec_time, transient)
-    if analysis_dict.get("calc_burst_features", True):
-        MFR, MNBR, MNBD, PSIB, NFBs, CVIBI = compute_bursting_features(analysis_dict, NBs, sum(APs[:, 1] > transient * fs), rec_time, transient)
-        features.update({
-            "MFR": MFR,
-            "MNBR": MNBR,
-            "MNBD": MNBD,
-            "PSIB": PSIB,
-            "#FBs": NFBs,
-            "CV_INBI": CVIBI
-        })
-        
+   
     # Compute ISI related measured using all APs after the transient 
     if analysis_dict.get("calc_spike_features", True):
-        meanisicorr, sdisicorr, isi_distance, meanISI, sdmeanISI, sdtimeISI = compute_ISI_measures(analysis_dict, APs[APs[:, 1] > transient * fs, :], fs, rec_time, transient)
+       
+        meanisicorr, sdisicorr, isi_distance, meanISI, sdmeanISI, sdtimeISI, active_electrodes = compute_ISI_measures(analysis_dict, APs[APs[:, 1] > transient * fs, :], fs, rec_time, transient)
+        
         MAC = compute_MAC(spikeratesmooth)      # Maximum autocorrelation component.
+        
+        numelectrodes = len(active_electrodes)
+        total_N_APs = sum(APs[:,1] > transient * fs) # note: APs are given in [channel, time sample]; not in seconds        
+        MFR = total_N_APs / (rec_time - transient)  / numelectrodes
+        
         features.update({
            "mean_ISI_corr": meanisicorr,
            "std_ISI_corr": sdisicorr,
@@ -499,8 +536,21 @@ def get_features_HH(analysis_dict, APs, rec_time, transient, fs, return_NBs=Fals
            "mean_ISI": meanISI,
            "std_mean_ISI": sdmeanISI,
            "std_ISI_times": sdtimeISI,
-           "MAC": MAC
+           "MAC": MAC,
+           "MFR": MFR,
        })
+        
+    if analysis_dict.get("calc_burst_features", True):
+        
+        MNBR, MNBD, PSIB, NFBs, CVIBI = compute_bursting_features(analysis_dict, NBs, total_N_APs, rec_time, transient)
+        features.update({            
+            "MNBR": MNBR,
+            "MNBD": MNBD,
+            "PSIB": PSIB,
+            "#FBs": NFBs,
+            "CV_INBI": CVIBI
+        })
+            
 
 
     features_df = pd.DataFrame([features])

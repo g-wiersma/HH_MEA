@@ -673,7 +673,7 @@ def get_equations_HH(dict_model_config):
                 eqs_onpre += eqs_onpre_std
                 eqs_onpre += eqs_onpre_ampa_std            
                 
-            if pre_mechanisms <= {"std", "stf"}:
+            if {"std","stf"} <= pre_mechanisms:
                 eqs_onpre += eqs_onpre_std_stf
                 eqs_onpre += eqs_onpre_ampa_std_stf
        
@@ -691,7 +691,7 @@ def get_equations_HH(dict_model_config):
                 eqs_onpre += eqs_onpre_std
                 eqs_onpre += eqs_onpre_gaba_std
           
-            if pre_mechanisms <= {"std", "stf"}:
+            if {"std","stf"} <= pre_mechanisms:
                 eqs_onpre += eqs_onpre_std_stf
                 eqs_onpre += eqs_onpre_gaba_std_stf
     

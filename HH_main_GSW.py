@@ -15,7 +15,7 @@ further analyses.
 from HH_utils.utils_simulator import simulate_HH_net
 from brian2 import (second, ms, umeter, ufarad, mV, cm, msiemens, nsiemens, kHz, 
                 pA, defaultclock)
-
+import numpy as np
 #%% ### Define parameters and network configuration: ###
 
 
@@ -44,7 +44,8 @@ runsettings_dict = {
     "sim_transient": 5 * second,                                    # first seconds to discard
     "time_step": defaultclock.dt,
     "electrode_grid_distance": 135 * umeter,
-    "radius_detect_neurons": 135/2 * umeter                         # the radius in which an electrode measures neurons
+    "radius_detect_neurons": 0.35*135 * umeter,                     # the radius in which an electrode measures neurons. Covers 36/100 of the entire surface of the well
+    "radius_MEA_well": np.sqrt(100/3)*0.35*135 * umeter             # the radius around the mea well
     }   
 
 network_dict = {    
@@ -216,6 +217,7 @@ synapse_dict = {
 }
 
 recording_dict = {    
+    # True neuronal measures:
     "Spikes_e": True, 
     "Spikes_i": True,
     "Voltage_e": True, 
@@ -227,28 +229,29 @@ recording_dict = {
     "I_AHP": True,
     "depression": True, 
     "facilitation": False,
+    # Voltage and spikes detected by electrodes:
+    "electrode_info": True,
 }
 
 plot_dict = {
-    "voltplot": True,                               # plots the membrane potential of a neuron in the network over time
-    "rasterplot": True,                             # makes a raster plot of all neurons
-    "electrodeplot": True,                          # plots the voltage measured by the 12 virtual electrodes
-    "rasterlecplot": True,                          # raster plot of APs and network bursts detected at electrodes (requires electrodeplot=True)
+    "neuron_voltplot": True,                         # plots the membrane potential of a neuron in the network over time
+    "neuron_rasterplot": True,                       # makes a raster plot of all neurons
+    "electrode_voltplot": True,                      # plots the voltage measured by the 12 virtual electrodes
+    "electrode_rasterplot": True,                    # raster plot of APs and network bursts detected at electrodes (requires electrode_voltplot=True)
     "STDplot": False,                                # plots the amount of short-term depression over time
     "synapseplot": False,                            # plots AMPA, NMDA and GABA currents
     "adaptationplot": False,                         # plots the afterhyperpolarization current
-    "mechanismplot": True,                          # excitatory raster plot with EPSC, STD and adaptation
-    "topologyplot": True,                           # shows neuron and electrode placement
-    "onechannelplot": False,                         # plots the voltage signal of one MEA electrode
-    "spikerateplot": True,                          # plots spike rate over time based on Brian spike detection
+    "summary_mechanismplot": True,                   # post-synaptic currents, firing rate, STD and AHP in one plot
+    "topologyplot": True,                            # shows neuron and electrode placement
+    "one_electrode_voltplot": False,                 # plots the voltage signal of one MEA electrode
+    "neuron_spikerateplot": True,                    # plots spike rate over time based on Brian spike detection (not detected, but directly from the neurons)
     "calciumplot": False,                            # plots calcium imaging intensity over time
     "patchplot": False,                              # shows simulated patch-clamp recording of a neuron
-    "burstplot": True,                              # plot the detected bursts on the rasterplot
 }
 
 analysis_dict = {
-    "calc_spike_features": True, 
-    "calc_burst_features": True, 
+    "calc_spike_features": True,                    # do or do not calculate the spike features
+    "calc_burst_features": True,                    # do or do not calculate the burst features
     "analysis_args": {      
         "time_bin": 25 * ms,                        # size of time bins to compute firing rate in seconds
         "smoothing": {"width": 7, "sigma": 3.0},    # parameters to smooth the firing rate with gaussian kernel
@@ -284,7 +287,7 @@ simulation_dict = {
 
     
     
-output_dict, feature_df = simulate_HH_net(simulation_dict)
+output_dict, electrode_info, feature_df = simulate_HH_net(simulation_dict)
 
 
 
