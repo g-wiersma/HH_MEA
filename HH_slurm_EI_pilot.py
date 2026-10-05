@@ -19,7 +19,7 @@ import h5py
 
 simulation_num = int(float(sys.argv[1]))
 
- 
+
 base_cache_dir = os.getcwd() # Update this with a real directory
 unique_cache_dir = os.path.join(base_cache_dir, str(simulation_num))    
 os.makedirs(unique_cache_dir, exist_ok=True)
@@ -29,6 +29,11 @@ print("cache directory created succesfully")
 
 ##############################################################################
 
+#%% select right simulation: 
+    
+missing_sims_indices = np.load("/home/cnph-slurm/Guido/missing_sims.npy")
+
+simulation_num = int(missing_sims_indices[simulation_num])
 
 
 #%% ### Define parameters and network configuration: ###

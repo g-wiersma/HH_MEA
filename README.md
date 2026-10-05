@@ -32,7 +32,12 @@ Doorn N, van Putten MJAM, Frega M. Automated inference of disease mechanisms in 
 - finally, one can control what plots to generate (e.g. the rasterplot, topologyplot of the distribution of neurons, plots of the synaptic currents, and much more)
 
 ## Installation:
-(to be added)
+Using conda: 
+git clone https://github.com/g-wiersma/HH_MEA.git
+cd HH_MEA
+conda env create -f HH_MEA_dependencies.yml
+conda activate HH_MEA
+
 
 ## Licence:
 (to be added)
