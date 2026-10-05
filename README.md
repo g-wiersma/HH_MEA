@@ -33,10 +33,10 @@ Doorn N, van Putten MJAM, Frega M. Automated inference of disease mechanisms in 
 
 ## Installation:
 Using conda: 
-git clone https://github.com/g-wiersma/HH_MEA.git
-cd HH_MEA
-conda env create -f HH_MEA_dependencies.yml
-conda activate HH_MEA
+- git clone https://github.com/g-wiersma/HH_MEA.git
+- cd HH_MEA
+- conda env create -f HH_MEA_dependencies.yml
+- conda activate HH_MEA
 
 
 ## Licence:
